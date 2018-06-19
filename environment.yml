@@ -1,0 +1,12 @@
+name: rainbow-ride
+dependencies:
+ - jupyter
+ - notebook
+ - conda-forge::jupyter_contrib_nbextensions
+ - conda-forge::jupyter_nbextensions_configurator
+ - numpy
+ - matplotlib
+ - pip:
+   - autopep8
+   - gym
+   - atari-py
