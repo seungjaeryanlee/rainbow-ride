@@ -186,6 +186,7 @@ class DQNAgent:
     def __init__(self, env, dqn, Optimizer,
                  epsilon_schedule,
                  replay_buffer,
+                 learning_rate=0.001,
                  discount_factor=0.99,
                  target_update_rate=64,
                  batch_size=32,
@@ -193,7 +194,7 @@ class DQNAgent:
         self.env = env
         self.dqn = dqn
         self.target_dqn = copy.deepcopy(dqn)
-        self.optimizer = Optimizer(dqn.parameters())
+        self.optimizer = Optimizer(dqn.parameters(), lr=learning_rate)
         self.epsilon_schedule = epsilon_schedule
         self.replay_buffer = replay_buffer
         self.discount_factor = discount_factor
@@ -228,8 +229,8 @@ class DQNAgent:
     def _compute_loss(self):
         state, action, reward, next_state, done = self.replay_buffer.sample(self.batch_size)
 
-        state      = torch.FloatTensor(np.float32(state))
-        next_state = torch.FloatTensor(np.float32(next_state))
+        state      = torch.FloatTensor(state)
+        next_state = torch.FloatTensor(next_state)
         action     = torch.LongTensor(action)
         reward     = torch.FloatTensor(reward)
         done       = torch.FloatTensor(done)
@@ -239,9 +240,10 @@ class DQNAgent:
 
         next_q_values = self.target_dqn(next_state)
         next_q_value  = next_q_values.max(1)[0]
-        expected_q_value = reward + self.discount_factor * next_q_value * (1 - done)
+        target = reward + self.discount_factor * next_q_value * (1 - done)
 
-        loss = (q_value - expected_q_value.data).pow(2).mean()
+        # loss = nn.SmoothL1Loss()(q_value, target.detach())
+        loss = nn.MSELoss()(q_value, target.detach())
 
         return loss
 

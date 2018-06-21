@@ -8,6 +8,7 @@ from dqn import DQN
 from agent import DQNAgent
 from replay import ReplayBuffer
 
+
 def get_epsilon_schedule(start, final, decay):
     return lambda step: final + (start - final) * np.exp(-1. * step / decay)
 
