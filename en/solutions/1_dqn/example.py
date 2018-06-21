@@ -23,7 +23,7 @@ def main():
                      epsilon_schedule=get_epsilon_schedule(1.0, 0.01, 500),
                      replay_buffer=ReplayBuffer(1000))
 
-    agent.train(n_steps=20000)
+    agent.train()
     total_reward = agent.play(render=True)
     print(total_reward)
 

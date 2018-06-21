@@ -218,11 +218,11 @@ class DQNAgent:
             The action chosen by the agent.
         """
         if random.random() > epsilon:
-            state   = torch.FloatTensor(state).unsqueeze(0)
+            state = torch.FloatTensor(state)
             q_values = self.dqn(state)
-            action  = int(q_values.max(1)[1].data[0].cpu().int().numpy())
+            action = q_values.argmax().item()
         else:
-            action = random.randrange(self.env.action_space.n)
+            action = self.env.action_space.sample()
         return action
 
     def _compute_loss(self):
