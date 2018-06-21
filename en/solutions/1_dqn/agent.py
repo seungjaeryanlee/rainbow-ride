@@ -1,8 +1,10 @@
+import copy
 import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 class NaiveDQNAgent:
@@ -173,5 +175,118 @@ class NaiveDQNAgent:
             total_reward += reward
             state = next_state
         self.env.close()
+
+        return total_reward
+
+class DQNAgent:
+    def __init__(self, env, dqn, Optimizer,
+                 epsilon_schedule,
+                 replay_buffer,
+                 discount_factor=0.99,
+                 target_update_rate=64,
+                 batch_size=32,
+                 min_buffer_size=100):
+        self.env = env
+        self.dqn = dqn
+        self.target_dqn = copy.deepcopy(dqn)
+        self.optimizer = Optimizer(dqn.parameters())
+        self.epsilon_schedule = epsilon_schedule
+        self.replay_buffer = replay_buffer
+        self.discount_factor = discount_factor
+        self.target_update_rate = target_update_rate
+        self.batch_size = batch_size
+        self.min_buffer_size = min_buffer_size
+
+    def act(self, state, epsilon):
+        if random.random() > epsilon:
+            state   = torch.FloatTensor(state).unsqueeze(0)
+            q_values = self.dqn(state)
+            action  = int(q_values.max(1)[1].data[0].cpu().int().numpy())
+        else:
+            action = random.randrange(self.env.action_space.n)
+        return action
+
+    def _compute_td_loss(self):
+        state, action, reward, next_state, done = self.replay_buffer.sample(self.batch_size)
+
+        state      = torch.FloatTensor(np.float32(state))
+        next_state = torch.FloatTensor(np.float32(next_state))
+        action     = torch.LongTensor(action)
+        reward     = torch.FloatTensor(reward)
+        done       = torch.FloatTensor(done)
+
+        q_values = self.dqn(state)
+        q_value  = q_values.gather(1, action.unsqueeze(1)).squeeze(1)
+
+        next_q_values = self.target_dqn(next_state)
+        next_q_value  = next_q_values.max(1)[0]
+        expected_q_value = reward + self.discount_factor * next_q_value * (1 - done)
+
+        loss = (q_value - expected_q_value.data).pow(2).mean()
+
+        return loss
+
+    def _update_parameters(self, loss):
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+    def _plot(self, frame_idx, rewards, losses, epsilons):
+        plt.figure(figsize=(20,5))
+        plt.subplot(131)
+        plt.title('Episodic Reward')
+        plt.plot(rewards)
+        plt.subplot(132)
+        plt.title('TD Loss')
+        plt.plot(losses)
+        plt.subplot(133)
+        plt.title('Epsilon')
+        plt.plot(epsilons)
+        plt.tight_layout()
+        plt.show()
+
+    def train(self, n_steps=10000):
+        all_rewards = []
+        losses = []
+        epsilons = []
+        episode_reward = 0
+
+        state = self.env.reset()
+        for frame_idx in range(1, n_steps + 1):
+            if frame_idx % self.target_update_rate == 0:
+                self.target_dqn.load_state_dict(self.dqn.state_dict())
+
+            epsilon = self.epsilon_schedule(frame_idx)
+            action = self.act(state, epsilon)
+            next_state, reward, done, _ = self.env.step(action)
+            self.replay_buffer.append(state, action, reward, next_state, done)
+
+            state = next_state
+            episode_reward += reward
+
+            if done:
+                state = self.env.reset()
+                all_rewards.append(episode_reward)
+                episode_reward = 0
+
+            if len(self.replay_buffer) > self.min_buffer_size:
+                loss = self._compute_td_loss()
+                self._update_parameters(loss)
+                losses.append(loss.item())
+                epsilons.append(epsilon)
+
+        self._plot(frame_idx, all_rewards, losses, epsilons)
+
+    def play(self, render=True):
+        done = False
+        state = self.env.reset()
+        total_reward = 0
+        while not done:
+            action = self.act(state, epsilon=0)
+            next_state, reward, done, _ = self.env.step(action)
+            if render:
+                self.env.render()
+            total_reward += reward
+            state = next_state
 
         return total_reward
