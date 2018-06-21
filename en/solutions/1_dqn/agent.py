@@ -157,7 +157,7 @@ class NaiveDQNAgent:
     def play(self, show=True):
         """
         Play an episode and return the total reward for the episode.
-        
+
         Parameters
         ----------
         show : bool
@@ -179,6 +179,10 @@ class NaiveDQNAgent:
         return total_reward
 
 class DQNAgent:
+    """
+    A reinforcement learning agent that uses DQN specified by DeepMind's 2015
+    paper to estimate action values.
+    """
     def __init__(self, env, dqn, Optimizer,
                  epsilon_schedule,
                  replay_buffer,
@@ -198,6 +202,21 @@ class DQNAgent:
         self.min_buffer_size = min_buffer_size
 
     def act(self, state, epsilon):
+        """
+        Return an action with respect to the epsilon-greedy policy.
+
+        Parameters
+        ----------
+        state : list of float
+            The current state given by the environment.
+        epsilon : float
+            The possibility of selecting a random action.
+
+        Returns
+        -------
+        action : int
+            The action chosen by the agent.
+        """
         if random.random() > epsilon:
             state   = torch.FloatTensor(state).unsqueeze(0)
             q_values = self.dqn(state)
@@ -206,7 +225,7 @@ class DQNAgent:
             action = random.randrange(self.env.action_space.n)
         return action
 
-    def _compute_td_loss(self):
+    def _compute_loss(self):
         state, action, reward, next_state, done = self.replay_buffer.sample(self.batch_size)
 
         state      = torch.FloatTensor(np.float32(state))
@@ -227,17 +246,37 @@ class DQNAgent:
         return loss
 
     def _update_parameters(self, loss):
+        """
+        Update parameters with the given loss.
+
+        Parameters
+        ----------
+        loss
+            The temporal difference loss of Q Learning.
+        """
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
     def _plot(self, frame_idx, rewards, losses, epsilons):
+        """
+        Plot the total episode rewards and losses per timestep.
+
+        Parameters
+        ----------
+        rewards : list of float
+            List of total rewards for each episode.
+        losses : list of float
+            List of losses for each timestep.
+        epsilons : list of float
+            List of epsilons for each timestep.
+        """
         plt.figure(figsize=(20,5))
         plt.subplot(131)
         plt.title('Episodic Reward')
         plt.plot(rewards)
         plt.subplot(132)
-        plt.title('TD Loss')
+        plt.title('Loss')
         plt.plot(losses)
         plt.subplot(133)
         plt.title('Epsilon')
@@ -246,6 +285,14 @@ class DQNAgent:
         plt.show()
 
     def train(self, n_steps=10000):
+        """
+        Train the agent for specified number of steps.
+
+        Parameters
+        ----------
+        n_steps : int
+            Number of timesteps to train the agent for.
+        """
         all_rewards = []
         losses = []
         epsilons = []
@@ -270,7 +317,7 @@ class DQNAgent:
                 episode_reward = 0
 
             if len(self.replay_buffer) > self.min_buffer_size:
-                loss = self._compute_td_loss()
+                loss = self._compute_loss()
                 self._update_parameters(loss)
                 losses.append(loss.item())
                 epsilons.append(epsilon)
@@ -278,6 +325,14 @@ class DQNAgent:
         self._plot(frame_idx, all_rewards, losses, epsilons)
 
     def play(self, render=True):
+        """
+        Play an episode and return the total reward for the episode.
+
+        Parameters
+        ----------
+        render : bool
+            If true, render the environment.
+        """
         done = False
         state = self.env.reset()
         total_reward = 0
