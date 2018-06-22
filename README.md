@@ -1,6 +1,12 @@
 # rainbow-ride
 
-Exercises for implementing Rainbow DQN with PyTorch
+Explaining Rainbow DQN with PyTorch
+
+## What is Rainbow Ride?
+
+Rainbow Ride is a collection of PyTorch implementations of DQN papers (DQN, DDQN, PER, Dueling, Distributional, NoisyNet, Rainbow). Each implementation contains both Python scripts (`.py`) and Jupyter Notebooks (`.ipynb`). The Jupyter notebook explains the code in the Python script files for those unfamiliar with PyTorch or DQN.
+
+To accommodate those without GPU, we use the simplest possible environment: **CartPole**. Those who have a GPU might want to use **Pong** or other Atari 2600 game environments for a better comparison with the results shown in the DQN papers.
 
 ## Installation via Conda
 
