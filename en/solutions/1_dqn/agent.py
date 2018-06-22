@@ -2,6 +2,7 @@ import copy
 import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 import matplotlib.pyplot as plt
 import numpy as np
@@ -183,24 +184,24 @@ class DQNAgent:
     A reinforcement learning agent that uses DQN specified by DeepMind's 2015
     paper to estimate action values.
     """
-    def __init__(self, env, dqn, Optimizer,
+    def __init__(self, env, dqn,
+                 optimizer,
                  epsilon_schedule,
                  replay_buffer,
-                 learning_rate=0.001,
                  discount_factor=0.99,
-                 target_update_rate=64,
+                 target_update_rate=10000,
                  batch_size=32,
-                 min_buffer_size=100):
+                 learn_start=32):
         self.env = env
         self.dqn = dqn
         self.target_dqn = copy.deepcopy(dqn)
-        self.optimizer = Optimizer(dqn.parameters(), lr=learning_rate)
+        self.optimizer = optimizer
         self.epsilon_schedule = epsilon_schedule
         self.replay_buffer = replay_buffer
         self.discount_factor = discount_factor
         self.target_update_rate = target_update_rate
         self.batch_size = batch_size
-        self.min_buffer_size = min_buffer_size
+        self.learn_start = learn_start
 
     def act(self, state, epsilon):
         """
@@ -227,6 +228,27 @@ class DQNAgent:
         return action
 
     def _compute_loss(self):
+        """
+        Compute the MSE loss given a transition (s, a, r, s').
+
+        Parameters
+        ----------
+        state : list of float
+            The current state s given by the environment.
+        action : int
+            Action a chosen by the agent.
+        reward : float
+            Reward given by the environment for given state s and action a.
+        next_state : list of float
+            The resulting state s' after taking action a on state s.
+        done: bool
+            True if the episode has terminated.
+
+        Returns
+        -------
+        loss : torch.tensor
+            The MSE loss of the DQN.
+        """
         state, action, reward, next_state, done = self.replay_buffer.sample(self.batch_size)
 
         state      = torch.FloatTensor(state)
@@ -242,8 +264,8 @@ class DQNAgent:
         next_q_value  = next_q_values.max(1)[0]
         target = reward + self.discount_factor * next_q_value * (1 - done)
 
-        # loss = nn.SmoothL1Loss()(q_value, target.detach())
-        loss = nn.MSELoss()(q_value, target.detach())
+    #     loss = F.smooth_l1_loss(q_value, target.detach())
+        loss = F.mse_loss(q_value, target.detach())
 
         return loss
 
@@ -260,7 +282,13 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
-    def _plot(self, frame_idx, rewards, losses, epsilons):
+    def _update_target(self):
+        """
+        Update the target network's weights with that of the update network.
+        """
+        self.target_dqn.load_state_dict(self.dqn.state_dict())
+
+    def _plot(self, rewards, losses, epsilons):
         """
         Plot the total episode rewards and losses per timestep.
 
@@ -278,7 +306,7 @@ class DQNAgent:
         plt.title('Episodic Reward')
         plt.plot(rewards)
         plt.subplot(132)
-        plt.title('Loss')
+        plt.title('TD Loss')
         plt.plot(losses)
         plt.subplot(133)
         plt.title('Epsilon')
@@ -286,7 +314,7 @@ class DQNAgent:
         plt.tight_layout()
         plt.show()
 
-    def train(self, n_steps=10000):
+    def train(self, n_steps=5000):
         """
         Train the agent for specified number of steps.
 
@@ -302,29 +330,30 @@ class DQNAgent:
 
         state = self.env.reset()
         for frame_idx in range(1, n_steps + 1):
-            if frame_idx % self.target_update_rate == 0:
-                self.target_dqn.load_state_dict(self.dqn.state_dict())
 
             epsilon = self.epsilon_schedule(frame_idx)
+            epsilons.append(epsilon)
             action = self.act(state, epsilon)
             next_state, reward, done, _ = self.env.step(action)
+            episode_reward += reward
             self.replay_buffer.append(state, action, reward, next_state, done)
 
-            state = next_state
-            episode_reward += reward
+            if len(self.replay_buffer) >= self.learn_start:
+                loss = self._compute_loss()
+                self._update_parameters(loss)
+                losses.append(loss.item())
 
             if done:
                 state = self.env.reset()
                 all_rewards.append(episode_reward)
                 episode_reward = 0
 
-            if len(self.replay_buffer) > self.min_buffer_size:
-                loss = self._compute_loss()
-                self._update_parameters(loss)
-                losses.append(loss.item())
-                epsilons.append(epsilon)
+            if frame_idx % self.target_update_rate == 0:
+                self._update_target()
 
-        self._plot(frame_idx, all_rewards, losses, epsilons)
+            state = next_state
+
+        self._plot(all_rewards, losses, epsilons)
 
     def play(self, render=True):
         """
